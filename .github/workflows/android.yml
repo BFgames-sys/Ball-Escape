@@ -1,13 +1,10 @@
-name: Android APK Build
+name: Ball Escape Android Build
 
 on:
   workflow_dispatch:
   push:
     branches:
       - main
-
-env:
-  PYTHONFORANDROID_PREREQUISITES_INSTALL_INTERACTIVE: 0
 
 jobs:
   build:
@@ -17,45 +14,125 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Prepare project
+        run: |
+          if [ ! -f main.py ] && [ -f ana.py ]; then
+            cp ana.py main.py
+          fi
+
+          cat > buildozer.spec <<'EOF'
+          [app]
+
+          title = Ball Escape
+          package.name = ballescape
+          package.domain = org.bfgames
+
+          source.dir = .
+          source.include_exts = py,png,jpg,jpeg,kv,atlas,json
+
+          version = 1.0
+
+          requirements = python3,kivy
+
+          orientation = landscape
+          fullscreen = 1
+
+          android.api = 36
+          android.minapi = 23
+          android.ndk = 28c
+
+          android.accept_sdk_license = True
+
+          android.archs = arm64-v8a
+
+          p4a.branch = develop
+
+          [buildozer]
+
+          log_level = 2
+          warn_on_root = 1
+          EOF
+
+          cat buildozer.spec
+          ls -la
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Install dependencies
+      - name: Install Buildozer
         run: |
           sudo apt-get update
-          sudo apt-get install -y git zip unzip automake libtool libltdl-dev
+          sudo apt-get install -y \
+            git \
+            zip \
+            unzip \
+            automake \
+            autoconf \
+            libtool \
+            libltdl-dev \
+            pkg-config \
+            zlib1g-dev \
+            libncurses-dev \
+            cmake \
+            libffi-dev \
+            libssl-dev
+
           python -m pip install --upgrade pip
           pip install buildozer cython
 
-      - name: Fix project files
+      - name: Bootstrap Android SDK
         run: |
-          if [ ! -f main.py ] && [ -f ana.py ]; then
-            cp ana.py main.py
+          buildozer android p4a -- --help || true
+
+      - name: Accept Buildozer Android licenses
+        run: |
+          SDK="$HOME/.buildozer/android/platform/android-sdk"
+
+          echo "Buildozer SDK:"
+          find "$SDK" -name sdkmanager -type f 2>/dev/null || true
+
+          SDKMANAGER=$(find "$SDK" -name sdkmanager -type f 2>/dev/null | head -n 1)
+
+          if [ -z "$SDKMANAGER" ]; then
+            echo "sdkmanager bulunamadi"
+            exit 1
           fi
 
-          if [ ! -f buildozer.spec ] && [ -f Buildozer.spec ]; then
-            cp Buildozer.spec buildozer.spec
-          fi
+          chmod +x "$SDKMANAGER"
 
-          sed -i 's/^android.api *= *.*/android.api = 36/' buildozer.spec
-          echo "android.accept_sdk_license = True" >> buildozer.spec
-          echo "p4a.branch = develop" >> buildozer.spec
+          yes | "$SDKMANAGER" --licenses || true
 
-      - name: Accept Android SDK licenses
-        run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+          "$SDKMANAGER" \
             "platform-tools" \
             "platforms;android-36" \
             "build-tools;37.0.0"
+
+      - name: Verify AIDL
+        run: |
+          find "$HOME/.buildozer/android/platform/android-sdk" \
+            -name aidl \
+            -type f \
+            -print
+
+          AIDL=$(find "$HOME/.buildozer/android/platform/android-sdk" \
+            -name aidl \
+            -type f \
+            | head -n 1)
+
+          if [ -z "$AIDL" ]; then
+            echo "AIDL HALA BULUNAMADI"
+            exit 1
+          fi
+
+          echo "AIDL bulundu: $AIDL"
 
       - name: Build APK
         run: |
