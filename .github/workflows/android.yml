@@ -10,11 +10,25 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      PYTHONFORANDROID_PREREQUISITES_INSTALL_INTERACTIVE: 0
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Project files fix
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Fix filenames
         run: |
           if [ ! -f main.py ] && [ -f ana.py ]; then
             cp ana.py main.py
@@ -24,19 +38,22 @@ jobs:
             cp Buildozer.spec buildozer.spec
           fi
 
-          sed -i 's/^android.api *= *.*/android.api = 36/' buildozer.spec || true
-
-          echo "Files:"
-          ls -la
-
-      - name: Build APK with official Buildozer
+      - name: Install dependencies
         run: |
-          docker pull kivy/buildozer:latest
+          sudo apt update
+          sudo apt install -y git zip unzip automake libltdl-dev
+          python -m pip install --upgrade pip
+          pip install buildozer cython
 
-          yes | docker run -i --rm \
-            -v "$PWD":/home/user/hostcwd \
-            kivy/buildozer:latest \
-            -v android debug
+      - name: Configure Buildozer
+        run: |
+          sed -i 's/^android.api *= *.*/android.api = 36/' buildozer.spec
+          echo "android.accept_sdk_license = True" >> buildozer.spec
+          echo "p4a.branch = develop" >> buildozer.spec
+
+      - name: Build APK
+        run: |
+          buildozer android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
