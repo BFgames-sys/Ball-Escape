@@ -14,13 +14,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build APK
+      - name: Project files fix
+        run: |
+          if [ ! -f main.py ] && [ -f ana.py ]; then
+            cp ana.py main.py
+          fi
+
+          if [ ! -f buildozer.spec ] && [ -f Buildozer.spec ]; then
+            cp Buildozer.spec buildozer.spec
+          fi
+
+          sed -i 's/^android.api *= *.*/android.api = 36/' buildozer.spec || true
+
+          echo "Files:"
+          ls -la
+
+      - name: Build APK with official Buildozer
         run: |
           docker pull kivy/buildozer:latest
-          docker run --rm \
+
+          yes | docker run -i --rm \
             -v "$PWD":/home/user/hostcwd \
             kivy/buildozer:latest \
-            android debug
+            -v android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
