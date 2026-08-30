@@ -1,0 +1,32 @@
+name: Android APK Oluştur
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Projeyi al
+        uses: actions/checkout@v4
+
+      - name: Java kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Buildozer ile APK oluştur
+        uses: ArtemSBulgakov/buildozer-action@v1
+        with:
+          command: buildozer android debug
+
+      - name: APK dosyasını yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ball-Escape-APK
+          path: bin/*.apk
